@@ -256,12 +256,7 @@ int app_thread(void *arg)
 					struct sniff_ethernet *ethernet = (struct sniff_ethernet*) packet;//=============================================
 					struct iphdr * iph = (struct iphdr *) (packet + sizeof(struct sniff_ethernet));
 					struct tcphdr *tcph = (struct tcphdr *) (packet + sizeof(struct iphdr) + sizeof(struct sniff_ethernet));
-					char source[INET_ADDRSTRLEN];
-					char dest[INET_ADDRSTRLEN];
-					inet_ntop(AF_INET, &(iph->saddr), source, INET_ADDRSTRLEN);
-					inet_ntop(AF_INET, &(iph->daddr), dest, INET_ADDRSTRLEN);
-					printf("source: %s\n", source);
-					printf("destination: %s\n", dest);
+					
 
 					if(ntohs(ethernet->ether_type) != 0x0800)//======================================================================
 					{//==============================================================================================================
