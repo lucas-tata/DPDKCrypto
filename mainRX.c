@@ -1,4 +1,5 @@
-/*Starter code for RX side of SDN Project
+/*SDN Project
+*Encryption/Decryption
 *Lucas Tata
 *Salvatore Amico
 */
@@ -37,6 +38,9 @@
 #include <signal.h>
 #include <unistd.h>
 
+#include <openssl/conf.h>
+#include <openssl/evp.h>
+#include <openssl/err.h>
 
 #define APP_PARAM_NAME_SIZE                      256 //the string size for storing the name
 #define RTE_MAX_ETHPORTS                         32  //the maximum possible ports
@@ -50,8 +54,13 @@
 #undef RTE_MAX_LCORE
 #define RTE_MAX_LCORE                            12  //the maximum possible cores
 #endif
+
+#define PAYLOAD_SIZE                             22
+
 //==========================================================================================================
 #define PORT_MASK                                0x01 //to choose the port you need, only 1 port in this example
+#define N 1024
+#define hash 1024
 //==========================================================================================================
 struct app_mempool_params {
 	uint32_t buffer_size;
@@ -110,6 +119,33 @@ struct app_pktq_hwq_in_params {
 	uint32_t size; //the number of ring descriptor of each RX queue
 	struct rte_eth_rxconf conf;
 };
+struct Flow
+{
+	uint32_t src_addr; 
+	uint32_t dst_addr; 
+	uint16_t  src_port;     
+	uint16_t  dst_port;    
+	unsigned short protocol; 
+};
+struct Heavy_Hitter 
+{
+	struct Flow flow;
+	uint32_t count;
+};
+static struct Heavy_Hitter heavy_hitter;
+uint32_t sketch[3][N];
+uint32_t hash0(struct Flow flow)
+{
+	return (uint32_t)((flow.src_addr * flow.dst_addr * flow.src_port * flow.dst_port * flow.protocol) % hash);
+}
+uint32_t hash1(struct Flow flow)
+{
+	return (uint32_t)((flow.src_addr + flow.dst_addr + flow.src_port + flow.dst_port + flow.protocol) % hash);
+}
+uint32_t hash2(struct Flow flow)
+{
+	return (uint32_t)((flow.src_addr * flow.dst_addr + flow.src_port * flow.dst_port + flow.protocol) % hash);
+}
 //these settings are used for setting up the RX queue, they are pretty standard. Please don't modify them unless you know what you are doing
 static const struct app_pktq_hwq_in_params default_hwq_in_params = {
 	.size = 512, 
@@ -217,9 +253,63 @@ struct sniff_ethernet
         u_char  smac[6];    // source host address 
         u_short ether_type; //  
 };
+
+void handleErrors(void)
+{
+  ERR_print_errors_fp(stderr);
+  abort();
+}
+
+
+
+int decrypt(unsigned char *ciphertext, int ciphertext_len, unsigned char *key,
+  unsigned char *iv, unsigned char *plaintext)
+{
+  EVP_CIPHER_CTX *ctx;
+
+  int len;
+
+  int plaintext_len;
+
+  /* Create and initialise the context */
+  if(!(ctx = EVP_CIPHER_CTX_new())) handleErrors();
+
+  /* Initialise the decryption operation. IMPORTANT - ensure you use a key
+   * and IV size appropriate for your cipher
+   * In this example we are using 256 bit AES (i.e. a 256 bit key). The
+   * IV size for *most* modes is the same as the block size. For AES this
+   * is 128 bits */
+  if(1 != EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv))
+    handleErrors();
+
+  /* Provide the message to be decrypted, and obtain the plaintext output.
+   * EVP_DecryptUpdate can be called multiple times if necessary
+   */
+  if(1 != EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len))
+    handleErrors();
+  plaintext_len = len;
+
+  /* Finalise the decryption. Further plaintext bytes may be written at
+   * this stage.
+   */
+  if(1 != EVP_DecryptFinal_ex(ctx, plaintext + len, &len)) handleErrors();
+  plaintext_len += len;
+
+  /* Clean up */
+  EVP_CIPHER_CTX_free(ctx);
+
+  return plaintext_len;
+}
+
+
 //==========================================================================================================
 int app_thread(void *arg)
 {
+
+
+	unsigned char decryptedtext[128];
+
+	
 	uint32_t lcore_id = rte_lcore_id();
 	uint32_t master_core_id = rte_get_master_lcore();
 	uint32_t i; 
@@ -243,19 +333,68 @@ int app_thread(void *arg)
 				n_pkts = rte_eth_rx_burst(0, 0, pkts, RTE_PORT_IN_BURST_SIZE_MAX); //trying to receive packts 
 				if(unlikely(n_pkts == 0)) {continue;} //if no packet received, then start the next try
 				total_pkts += n_pkts;
+
+
+				
+				
 				
 				//retrieving the data from each packet
 				for(i=0; i<n_pkts; i++)
 				{
 					//pretty standard way to get the pointer which points to the packet data
 					uint8_t* packet = rte_pktmbuf_mtod(pkts[i], uint8_t*); 
+
+					//printf("%d\n", pkts[i]->pkt_len);
 					
 					//Pease modify the following lines 246-252 according to what you want to do on each packet
 					//===============================================================================================================
 					//print out the ethertype if it is not the standard IPV4 packets, https://en.wikipedia.org/wiki/EtherType========
 					struct sniff_ethernet *ethernet = (struct sniff_ethernet*) packet;//=============================================
 					struct iphdr * iph = (struct iphdr *) (packet + sizeof(struct sniff_ethernet));
-					struct tcphdr *tcph = (struct tcphdr *) (packet + sizeof(struct iphdr) + sizeof(struct sniff_ethernet));
+					struct udphdr *udph = (struct udphdr *) (packet + sizeof(struct iphdr) + sizeof(struct sniff_ethernet));
+					unsigned char * payload = (unsigned char *)packet + sizeof(struct udphdr) + sizeof(struct iphdr) + sizeof(struct sniff_ethernet);
+					//
+						/* A 256 bit key */
+				unsigned char *key = (unsigned char *)"01234567890123456789012345678901";
+
+				/* A 128 bit IV */
+				unsigned char *iv = (unsigned char *)"0123456789012345";
+
+				//printf("this is %s \n", payload);
+
+				/* Message to be encrypted */
+				//unsigned char *plaintext =
+                //(unsigned char *)payload;
+
+				unsigned char plaintext[128];
+
+				memcpy(plaintext, payload, pkts[i]->pkt_len - (sizeof(struct udphdr) + sizeof(struct iphdr) + sizeof(struct sniff_ethernet)));
+
+				/* Buffer for ciphertext. Ensure the buffer is long enough for the
+				* ciphertext which may be longer than the plaintext, dependant on the
+				* algorithm and mode
+				*/
+
+				/* Buffer for the decrypted text */
+
+				//printf("%s \n", plaintext);
+
+				//unsigned char plaintext[256];
+
+				
+
+
+				/* Decrypt the ciphertext */
+
+				//printf("string length : %d\n", strlen((const char*)plaintext));
+
+				int decryptedtext_len = decrypt(plaintext, strlen((const char*)plaintext), key, iv, decryptedtext);
+
+				/* Add a NULL terminator. We are expecting printable text */
+				decryptedtext[decryptedtext_len] = '\0';
+
+				/* Show the decrypted text */
+				
 					
 
 					if(ntohs(ethernet->ether_type) != 0x0800)//======================================================================
@@ -264,6 +403,7 @@ int app_thread(void *arg)
 					}//==============================================================================================================
 				}
 				
+				
 				//free the packets, this is must-do, otherwise the memory pool will be full, and no more packets can be received
 				for(i=0; i<n_pkts; i++)
 				{
@@ -271,6 +411,10 @@ int app_thread(void *arg)
 				}
 			}
 			printf("lcore %u, received %u packets in %u seconds.\n", lcore_id, total_pkts, total_time_in_sec);
+			printf("Decrypted text is:\n");
+			printf("%s\n", decryptedtext);
+		
+			
 		}			
 			
 	}
@@ -291,6 +435,7 @@ int main(int argc, char **argv)
 	app_init(argc, argv);
 	rte_eal_mp_remote_launch(app_thread, NULL, CALL_MASTER);
 }
+
 
 
 
