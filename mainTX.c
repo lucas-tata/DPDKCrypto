@@ -1,7 +1,10 @@
-/*SDN Project
-*Encryption/Decryption
-*Lucas Tata
-*Salvatore Andrew Amico
+/*
+* Modified By: Lucas Tata and Salvatore Andrew Amico
+* Modified On: 24 April 2018
+* Modified To: Show EVP Encrpytion and Decyption on DBDK
+*
+* File Named: mainTX.c
+* Created as: SDN Project
 */
 #include <stdint.h>
 #include <string.h>
@@ -40,9 +43,9 @@
 #include <rte_port_ring.h>
 #include <rte_pipeline.h>
 
-#include <openssl/conf.h>
-#include <openssl/evp.h>
-#include <openssl/err.h>
+#include <openssl/conf.h>	// Encrption Includes openssl
+#include <openssl/evp.h>	// Encrption Includes openssl
+#include <openssl/err.h>	// Encrption Includes openssl
 
 
 #define PORT_MASK                                0x01 //only 1 port, change it for different case
@@ -408,7 +411,7 @@ void handleErrors(void)
   ERR_print_errors_fp(stderr);
   abort();
 }
-int encrypt(unsigned char *plaintext, int plaintext_len, unsigned char *key,
+int encrypt(unsigned char *plaintext, int plaintext_len, unsigned char *key,	// Function based on Open SSL Wiki
   unsigned char *iv, unsigned char *ciphertext)
 {
   EVP_CIPHER_CTX *ctx;
@@ -447,7 +450,7 @@ int encrypt(unsigned char *plaintext, int plaintext_len, unsigned char *key,
   return ciphertext_len;
 }
 
-int packet_fillin_random(uint8_t* sendbuf, int lcore_id)
+int packet_fillin_random(uint8_t* sendbuf, int lcore_id)	// Modified from lab 2 to change payload
 {
 	 unsigned char *key = (unsigned char *)"01234567890123456789012345678901";
 
@@ -474,7 +477,7 @@ int packet_fillin_random(uint8_t* sendbuf, int lcore_id)
 
   /* Do something useful with the ciphertext here */
   printf("Ciphertext is:\n");
-  BIO_dump_fp (stdout, (const char *)ciphertext, ciphertext_len);
+  BIO_dump_fp (stdout, (const char *)ciphertext, ciphertext_len);	// Built into open SSL, used to print encrpytion
 
 
 
@@ -535,14 +538,14 @@ int packet_fillin_random(uint8_t* sendbuf, int lcore_id)
 	
 	tx_len += sizeof(struct udphdr);
 	//fill the payload with charater A
-	unsigned char * payload = (uint8_t *)sendbuf + tx_len;
+	unsigned char * payload = (uint8_t *)sendbuf + tx_len;	// start payload
 	
 	//int payload_size = (myrand(lcore_id) & 1023) + 64;
 		
-	int payload_size = ciphertext_len;
+	int payload_size = ciphertext_len;	// corect the length after encpryption
 	
 
-	memcpy(payload, ciphertext, ciphertext_len);
+	memcpy(payload, ciphertext, ciphertext_len);	// copy payload with correct length
 	printf("payload being sent is %s\n", plaintext);
 	//memset(payload, 0, payload_size);
 	

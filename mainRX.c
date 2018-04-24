@@ -1,7 +1,10 @@
-/*SDN Project
-*Encryption/Decryption
-*Lucas Tata
-*Salvatore Andrew Amico
+/*
+* Modified By: Lucas Tata and Salvatore Andrew Amico
+* Modified On: 24 April 2018
+* Modified To: Show EVP Encrpytion and Decyption on DBDK
+*
+* File Named: mainRX.c
+* Created as: SDN Project
 */
 #include <stdint.h>
 #include <string.h>
@@ -38,9 +41,9 @@
 #include <signal.h>
 #include <unistd.h>
 
-#include <openssl/conf.h>
-#include <openssl/evp.h>
-#include <openssl/err.h>
+#include <openssl/conf.h>	// Encrption Includes openssl
+#include <openssl/evp.h>	// Encrption Includes openssl
+#include <openssl/err.h>	// Encrption Includes openssl
 
 #define APP_PARAM_NAME_SIZE                      256 //the string size for storing the name
 #define RTE_MAX_ETHPORTS                         32  //the maximum possible ports
@@ -262,7 +265,7 @@ void handleErrors(void)
 
 
 
-int decrypt(unsigned char *ciphertext, int ciphertext_len, unsigned char *key,
+int decrypt(unsigned char *ciphertext, int ciphertext_len, unsigned char *key,	// Function based on Open SSL wiki 
   unsigned char *iv, unsigned char *plaintext)
 {
   EVP_CIPHER_CTX *ctx;
@@ -307,7 +310,7 @@ int app_thread(void *arg)
 {
 
 
-	unsigned char decryptedtext[128];
+	unsigned char decryptedtext[128];	// define the local variable to hold decrpyted text
 
 	
 	uint32_t lcore_id = rte_lcore_id();
@@ -352,7 +355,7 @@ int app_thread(void *arg)
 					struct sniff_ethernet *ethernet = (struct sniff_ethernet*) packet;//=============================================
 					struct iphdr * iph = (struct iphdr *) (packet + sizeof(struct sniff_ethernet));
 					struct udphdr *udph = (struct udphdr *) (packet + sizeof(struct iphdr) + sizeof(struct sniff_ethernet));
-					unsigned char * payload = (unsigned char *)packet + sizeof(struct udphdr) + sizeof(struct iphdr) + sizeof(struct sniff_ethernet);
+					unsigned char * payload = (unsigned char *)packet + sizeof(struct udphdr) + sizeof(struct iphdr) + sizeof(struct sniff_ethernet);	// Get the payload to decrpyt
 					//
 						/* A 256 bit key */
 				unsigned char *key = (unsigned char *)"01234567890123456789012345678901";
@@ -368,7 +371,7 @@ int app_thread(void *arg)
 
 				unsigned char plaintext[128];
 
-				memcpy(plaintext, payload, pkts[i]->pkt_len - (sizeof(struct udphdr) + sizeof(struct iphdr) + sizeof(struct sniff_ethernet)));
+				memcpy(plaintext, payload, pkts[i]->pkt_len - (sizeof(struct udphdr) + sizeof(struct iphdr) + sizeof(struct sniff_ethernet)));	// put payload into plaintext
 
 				/* Buffer for ciphertext. Ensure the buffer is long enough for the
 				* ciphertext which may be longer than the plaintext, dependant on the
@@ -388,7 +391,7 @@ int app_thread(void *arg)
 
 				//printf("string length : %d\n", strlen((const char*)plaintext));
 
-				int decryptedtext_len = decrypt(plaintext, strlen((const char*)plaintext), key, iv, decryptedtext);
+				int decryptedtext_len = decrypt(plaintext, strlen((const char*)plaintext), key, iv, decryptedtext);	// decrpy line, returns length
 
 				/* Add a NULL terminator. We are expecting printable text */
 				decryptedtext[decryptedtext_len] = '\0';
@@ -411,8 +414,8 @@ int app_thread(void *arg)
 				}
 			}
 			printf("lcore %u, received %u packets in %u seconds.\n", lcore_id, total_pkts, total_time_in_sec);
-			printf("Decrypted text is:\n");
-			printf("%s\n", decryptedtext);
+			printf("Decrypted text is:\n"); // Print decrypted text every ten seconds
+			printf("%s\n", decryptedtext);	// Print decrypted text every ten seconds
 		
 			
 		}			
