@@ -1,7 +1,7 @@
 /*SDN Project
 *Encryption/Decryption
 *Lucas Tata
-*Salvatore Amico
+*Salvatore Andrew Amico
 */
 #include <stdint.h>
 #include <string.h>
